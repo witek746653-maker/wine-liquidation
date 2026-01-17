@@ -83,6 +83,18 @@ for insert
 to authenticated
 with check (true);
 
+-- Быстрый “итог” для UI (чипы в списке Истории)
+-- Считает суммарное изменение количества (delta_sum) и количество событий (events_count) по каждой позиции.
+drop view if exists public.wine_event_summary;
+create view public.wine_event_summary as
+select
+  wine_id,
+  count(*)::int as events_count,
+  coalesce(sum(delta), 0)::int as delta_sum,
+  max(created_at) as last_event_at
+from public.wine_events
+group by wine_id;
+
 -- Публичный режим без пароля (НЕ рекомендуется для реальных данных).
 -- Если когда-нибудь захотите “без логина”, раскомментируйте блок ниже.
 --
