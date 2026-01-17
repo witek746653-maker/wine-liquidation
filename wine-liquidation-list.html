@@ -188,13 +188,9 @@
       const WINE_CATEGORIES = ["игристое", "красное", "белое", "розовое"];
 
       // --- Данные по умолчанию ---
-      const INITIAL_WINES = [
-        { id: "wine_001", category: "красное", name: "Château Margaux 2015", region: "Bordeaux, France", price: 850, discountPrice: 637.5, quantity: 4 },
-        { id: "wine_002", category: "красное", name: "Chianti Classico Riserva", region: "Tuscany, Italy", price: 45, discountPrice: 33.75, quantity: 12 },
-        { id: "wine_003", category: "белое", name: "Sauvignon Blanc", region: "Marlborough, NZ", price: 22, discountPrice: 16.5, quantity: 24 },
-        { id: "wine_004", category: "красное", name: "Cabernet Sauvignon", region: "Napa Valley, USA", price: 55, discountPrice: 41.25, quantity: 8 },
-        { id: "wine_005", category: "игристое", name: "Champagne Brut", region: "Champagne, France", price: 120, discountPrice: 90.0, quantity: 6 },
-      ];
+      // Раньше здесь были “примерные” позиции. По вашей просьбе — убрано.
+      // Если ни Excel, ни localStorage, ни Supabase не дали данных — список будет пустым.
+      const INITIAL_WINES = [];
 
       // **localStorage**: «память» браузера. Данные останутся после перезагрузки страницы.
       const STORAGE_KEY = "vino_del_mar_inventory_v1";
@@ -530,6 +526,173 @@
         );
       }
 
+      function HistoryModal({
+        wines,
+        onClose,
+        isSupabaseReady,
+        requireAuth,
+        authUser,
+        historyOpenWineId,
+        setHistoryOpenWineId,
+        historyLoadingWineId,
+        historyEventsByWineId,
+        fetchWineEvents,
+        formatDateTime,
+      }) {
+        const [query, setQuery] = useState("");
+        const q = String(query || "").trim().toLowerCase();
+        const list = useMemo(() => {
+          const base = Array.isArray(wines) ? wines.slice() : [];
+          base.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+          if (!q) return base;
+          return base.filter((w) => String(w.name || "").toLowerCase().includes(q));
+        }, [wines, q]);
+
+        const canLoad = isSupabaseReady && (!requireAuth || authUser);
+
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5 dark:bg-[#1c2e1f] dark:ring-white/10">
+              <div className="p-6 sm:p-8">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-2xl font-black text-[var(--ink)] dark:text-white leading-tight">История</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">
+                      Показывает изменения количества. Если количество уменьшилось — это “продажа”.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Закрыть"
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      close
+                    </span>
+                  </button>
+                </div>
+
+                {!canLoad ? (
+                  <div className="rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700/40">
+                    {isSupabaseReady ? (
+                      <div>
+                        Нужно войти (пароль) чтобы видеть историю.
+                      </div>
+                    ) : (
+                      <div>Supabase не настроен — историю показать нельзя.</div>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 bg-white/60 dark:bg-white/10 border border-gray-200/70 dark:border-white/10 rounded-2xl px-4 h-12">
+                    <span className="material-symbols-outlined text-gray-400" aria-hidden="true">
+                      search
+                    </span>
+                    <input
+                      className="w-full bg-transparent outline-none text-sm font-medium text-[var(--ink)] dark:text-white placeholder:text-gray-400"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Найти позицию..."
+                      aria-label="Поиск по названию"
+                    />
+                    {query ? (
+                      <button
+                        type="button"
+                        onClick={() => setQuery("")}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                        aria-label="Очистить поиск"
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          close
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 max-h-[60vh] overflow-y-auto no-scrollbar pr-1">
+                  {list.length ? (
+                    <div className="flex flex-col gap-3">
+                      {list.map((w) => {
+                        const isOpen = historyOpenWineId === w.id;
+                        const events = historyEventsByWineId[w.id] || null;
+                        const loading = historyLoadingWineId === w.id;
+
+                        return (
+                          <div key={w.id} className="rounded-2xl border border-gray-200/70 dark:border-white/10 bg-white/60 dark:bg-white/10 p-4">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const nextOpen = isOpen ? null : w.id;
+                                setHistoryOpenWineId(nextOpen);
+                                if (nextOpen) await fetchWineEvents(nextOpen);
+                              }}
+                              className="w-full flex items-start justify-between gap-3 text-left"
+                            >
+                              <div className="min-w-0">
+                                <div className="font-bold text-[var(--ink)] dark:text-white break-words">{w.name}</div>
+                                <div className="text-[10px] uppercase text-gray-500 dark:text-gray-400 break-words">{w.region}</div>
+                              </div>
+                              <div className="shrink-0 flex items-center gap-2">
+                                <div className="px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-black/20 text-xs font-black tabular-nums">
+                                  {w.quantity}
+                                </div>
+                                <span className="material-symbols-outlined text-gray-500" aria-hidden="true">
+                                  {isOpen ? "expand_less" : "expand_more"}
+                                </span>
+                              </div>
+                            </button>
+
+                            {isOpen ? (
+                              <div className="mt-3">
+                                {loading ? (
+                                  <div className="text-xs text-gray-500">Загружаю историю...</div>
+                                ) : events && events.length ? (
+                                  <div className="flex flex-col gap-2">
+                                    {events.map((ev) => {
+                                      const sign = ev.delta > 0 ? "+" : "";
+                                      const label =
+                                        ev.event_type === "sale" ? "Продажа" : ev.event_type === "restock" ? "Поступление" : "Изменение";
+                                      return (
+                                        <div key={ev.id} className="rounded-xl border border-gray-200/60 dark:border-white/10 bg-white/70 dark:bg-black/20 p-3">
+                                          <div className="flex items-center justify-between gap-3">
+                                            <div className="text-xs font-black text-[var(--ink)] dark:text-white">
+                                              {label}: {sign}
+                                              {ev.delta}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500">{formatDateTime(ev.created_at)}</div>
+                                          </div>
+                                          <div className="mt-1 text-[10px] text-gray-500">
+                                            Было: <b>{ev.old_quantity}</b> → Стало: <b>{ev.new_quantity}</b>
+                                            {ev.source ? ` • источник: ${ev.source}` : ""}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-500">
+                                    Пока нет записей. Измените остаток — и событие появится здесь.
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center text-sm text-gray-500 py-6">Ничего не найдено</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       function App() {
         const [wines, setWines] = useState([]);
         const [loading, setLoading] = useState(true);
@@ -560,6 +723,78 @@
         const [activeCategory, setActiveCategory] = useState(null);
         // Поиск по названию (в реальном времени)
         const [searchQuery, setSearchQuery] = useState("");
+
+        // --- История изменений количества ---
+        const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+        const [historyOpenWineId, setHistoryOpenWineId] = useState(null);
+        const [historyLoadingWineId, setHistoryLoadingWineId] = useState(null);
+        const [historyEventsByWineId, setHistoryEventsByWineId] = useState({}); // { [wineId]: events[] }
+
+        function formatDateTime(value) {
+          try {
+            return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+          } catch (_) {
+            return String(value || "");
+          }
+        }
+
+        async function logQuantityEvent({ wineId, oldQuantity, newQuantity, source }) {
+          const supa = supaRef.current;
+          if (!supa) return;
+          if (SUPABASE_REQUIRE_AUTH && !authUser) return;
+          if (!wineId) return;
+
+          const oldQ = Math.max(0, Math.floor(safeNumber(oldQuantity, 0)));
+          const newQ = Math.max(0, Math.floor(safeNumber(newQuantity, 0)));
+          if (oldQ === newQ) return;
+
+          const delta = newQ - oldQ;
+          const eventType = delta < 0 ? "sale" : delta > 0 ? "restock" : "adjust";
+
+          try {
+            const { error } = await supa.from("wine_events").insert([
+              {
+                wine_id: String(wineId),
+                event_type: eventType,
+                delta,
+                old_quantity: oldQ,
+                new_quantity: newQ,
+                source: String(source || ""),
+                actor: String(authUser?.email || ""),
+              },
+            ]);
+            if (error) throw error;
+          } catch (e) {
+            console.warn("wine_events insert error:", e);
+          }
+        }
+
+        async function fetchWineEvents(wineId) {
+          const supa = supaRef.current;
+          if (!supa) return;
+          if (SUPABASE_REQUIRE_AUTH && !authUser) return;
+          if (!wineId) return;
+
+          // Уже загружали — не трогаем
+          if (historyEventsByWineId[wineId]) return;
+
+          setHistoryLoadingWineId(wineId);
+          try {
+            const { data, error } = await supa
+              .from("wine_events")
+              .select("id, wine_id, event_type, delta, old_quantity, new_quantity, source, actor, created_at")
+              .eq("wine_id", wineId)
+              .order("created_at", { ascending: false })
+              .limit(50);
+            if (error) throw error;
+            setHistoryEventsByWineId((prev) => ({ ...prev, [wineId]: data || [] }));
+          } catch (e) {
+            console.warn("wine_events load error:", e);
+            setHistoryEventsByWineId((prev) => ({ ...prev, [wineId]: [] }));
+          } finally {
+            setHistoryLoadingWineId(null);
+          }
+        }
 
         async function loadFromSupabase() {
           const supa = supaRef.current;
@@ -776,16 +1011,24 @@
         const handleUpdateQuantity = (newQuantity) => {
           if (!selectedWine) return;
           const q = Math.max(0, Math.floor(safeNumber(newQuantity, selectedWine.quantity || 0)));
+          const oldQ = Math.max(0, Math.floor(safeNumber(selectedWine.quantity, 0)));
           setWines((prev) => {
             const next = prev.map((w) => (w.id === selectedWine.id ? { ...w, quantity: q } : w));
             next.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
             return next;
           });
+          // Пишем событие “продажа/поступление” только при изменении количества
+          logQuantityEvent({ wineId: selectedWine.id, oldQuantity: oldQ, newQuantity: q, source: "modal" });
           closeEditModal();
         };
 
         // Inline-редактирование по onBlur (когда поле теряет фокус)
         const handleInlineUpdate = (id, field, value) => {
+          // Если меняем количество — запомним старое значение ДО setWines
+          const currentWine = wines.find((w) => w.id === id);
+          const oldQ = field === "quantity" ? Math.max(0, Math.floor(safeNumber(currentWine?.quantity, 0))) : null;
+          const newQ = field === "quantity" ? Math.max(0, Math.floor(safeNumber(value, 0))) : null;
+
           setWines((prev) => {
             const next = prev.map((w) => {
               if (w.id !== id) return w;
@@ -798,6 +1041,10 @@
             next.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
             return next;
           });
+
+          if (field === "quantity" && currentWine) {
+            logQuantityEvent({ wineId: id, oldQuantity: oldQ, newQuantity: newQ, source: "inline" });
+          }
         };
 
         // Excel export
@@ -980,7 +1227,133 @@
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto no-scrollbar">
+                    {/* Телефон: карточки (без горизонтального скролла) */}
+                    <div className="sm:hidden">
+                      {loading ? (
+                        <div className="flex justify-center py-10">
+                          <span className="material-symbols-outlined animate-spin text-4xl text-[var(--brand)]" aria-hidden="true">
+                            refresh
+                          </span>
+                        </div>
+                      ) : filteredWines.length ? (
+                        <div className="flex flex-col gap-3">
+                          {filteredWines.map((wine) => (
+                            <div
+                              key={wine.id}
+                              className="rounded-2xl border border-gray-200/70 dark:border-white/10 bg-white/60 dark:bg-white/10 p-4"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  {isEditMode ? (
+                                    <>
+                                      <input
+                                        className="edit-input font-bold text-[var(--ink)] dark:text-white mb-1"
+                                        defaultValue={wine.name}
+                                        onBlur={(e) => handleInlineUpdate(wine.id, "name", e.target.value)}
+                                      />
+                                      <input
+                                        className="edit-input text-[10px] uppercase text-gray-500 dark:text-gray-400"
+                                        defaultValue={wine.region}
+                                        onBlur={(e) => handleInlineUpdate(wine.id, "region", e.target.value)}
+                                      />
+                                      <select
+                                        className="edit-input text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-200"
+                                        defaultValue={wine.category || ""}
+                                        onChange={(e) => handleInlineUpdate(wine.id, "category", e.target.value)}
+                                        aria-label="Категория вина"
+                                      >
+                                        <option value="">(без категории)</option>
+                                        {WINE_CATEGORIES.map((c) => (
+                                          <option key={c} value={c}>
+                                            {c}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="font-black text-[var(--ink)] dark:text-white leading-tight break-words">{wine.name}</div>
+                                      <div className="text-[10px] uppercase text-gray-500 dark:text-gray-400 break-words">{wine.region}</div>
+                                      {wine.category ? (
+                                        <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[var(--brand)]/10 text-[var(--brand)] border border-[var(--brand)]/20">
+                                          {wine.category}
+                                        </div>
+                                      ) : null}
+                                    </>
+                                  )}
+                                </div>
+
+                                {!isEditMode ? (
+                                  <div className="shrink-0 flex flex-col items-end gap-2">
+                                    <div className="w-16 h-9 flex items-center justify-center rounded-lg border border-gray-200 dark:bg-white/10 dark:border-white/20 bg-white/50 text-sm font-black text-[var(--ink)] dark:text-white">
+                                      {wine.quantity}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditModal(wine)}
+                                      className="h-9 px-3 rounded-lg bg-gray-100 hover:bg-[var(--brand)] hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider"
+                                    >
+                                      Остаток
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-2 gap-3">
+                                {showPrice ? (
+                                  <div className="rounded-xl bg-white/60 dark:bg-black/20 border border-gray-200/60 dark:border-white/10 p-3">
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Цена</div>
+                                    {isEditMode ? (
+                                      <input
+                                        type="number"
+                                        className="edit-input mt-1"
+                                        defaultValue={wine.price}
+                                        onBlur={(e) => handleInlineUpdate(wine.id, "price", e.target.value)}
+                                      />
+                                    ) : (
+                                      <div className="mt-1 font-bold text-[var(--ink)] dark:text-white">{formatRub(wine.price)} ₽</div>
+                                    )}
+                                  </div>
+                                ) : null}
+
+                                {showDiscount ? (
+                                  <div className="rounded-xl bg-white/60 dark:bg-black/20 border border-gray-200/60 dark:border-white/10 p-3">
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Со скидкой</div>
+                                    {isEditMode ? (
+                                      <input
+                                        type="number"
+                                        className="edit-input mt-1 text-[var(--brand)]"
+                                        defaultValue={wine.discountPrice}
+                                        onBlur={(e) => handleInlineUpdate(wine.id, "discountPrice", e.target.value)}
+                                      />
+                                    ) : (
+                                      <div className="mt-1 font-black text-[var(--brand)]">{formatRub(wine.discountPrice)} ₽</div>
+                                    )}
+                                  </div>
+                                ) : null}
+
+                                {showQuantity && isEditMode ? (
+                                  <div className="col-span-2 rounded-xl bg-white/60 dark:bg-black/20 border border-gray-200/60 dark:border-white/10 p-3">
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Остаток (бутылок)</div>
+                                    <input
+                                      type="number"
+                                      className="edit-input mt-1 text-center font-black"
+                                      defaultValue={wine.quantity}
+                                      onBlur={(e) => handleInlineUpdate(wine.id, "quantity", e.target.value)}
+                                    />
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-sm text-gray-500 py-8">Пока нет позиций</div>
+                      )}
+                    </div>
+
+                    {/* Компьютер: таблица */}
+                    <div className="hidden sm:block overflow-x-auto no-scrollbar">
                       {loading ? (
                         <div className="flex justify-center py-10">
                           <span className="material-symbols-outlined animate-spin text-4xl text-[var(--brand)]" aria-hidden="true">
@@ -1258,22 +1631,17 @@
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm("Сбросить данные и вернуть начальный список?")) {
-                          localStorage.removeItem(STORAGE_KEY);
-                          const next = INITIAL_WINES.slice().map(normalizeWine);
-                          next.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-                          setWines(next);
-                          setIsMenuOpen(false);
-                        }
+                        setIsHistoryOpen(true);
+                        setIsMenuOpen(false);
                       }}
                       className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-white dark:bg-[#131811] border border-gray-200 dark:border-white/10 shadow-sm hover:shadow-md hover:border-red-300 transition-all text-left group"
                     >
-                      <div className="size-10 flex items-center justify-center rounded-lg bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                        <span className="material-symbols-outlined" aria-hidden="true">restart_alt</span>
+                      <div className="size-10 flex items-center justify-center rounded-lg bg-purple-50 text-purple-700 group-hover:bg-purple-700 group-hover:text-white transition-colors">
+                        <span className="material-symbols-outlined" aria-hidden="true">history</span>
                       </div>
                       <div>
-                        <span className="block text-sm font-bold text-[var(--ink)] dark:text-white">Сбросить данные</span>
-                        <span className="block text-[10px] text-gray-500">Вернуть начальный список</span>
+                        <span className="block text-sm font-bold text-[var(--ink)] dark:text-white">История</span>
+                        <span className="block text-[10px] text-gray-500">Проверка продаж и изменений</span>
                       </div>
                     </button>
                   </div>
@@ -1288,6 +1656,26 @@
             {/* Модалка редактирования (только если НЕ включен глобальный режим ред.) */}
             {isModalOpen && selectedWine && !isEditMode && (
               <UpdateModal wine={selectedWine} onClose={closeEditModal} onSave={handleUpdateQuantity} />
+            )}
+
+            {/* История (проверка продаж/изменений) */}
+            {isHistoryOpen && (
+              <HistoryModal
+                wines={wines}
+                onClose={() => {
+                  setIsHistoryOpen(false);
+                  setHistoryOpenWineId(null);
+                }}
+                isSupabaseReady={Boolean(supaRef.current)}
+                requireAuth={SUPABASE_REQUIRE_AUTH}
+                authUser={authUser}
+                historyOpenWineId={historyOpenWineId}
+                setHistoryOpenWineId={setHistoryOpenWineId}
+                historyLoadingWineId={historyLoadingWineId}
+                historyEventsByWineId={historyEventsByWineId}
+                fetchWineEvents={fetchWineEvents}
+                formatDateTime={formatDateTime}
+              />
             )}
           </div>
         );

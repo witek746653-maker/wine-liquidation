@@ -49,6 +49,40 @@ to authenticated
 using (true)
 with check (true);
 
+-- ============================
+-- История изменений (журнал)
+-- ============================
+-- В Supabase обычно уже включён pgcrypto, но на всякий случай:
+create extension if not exists pgcrypto;
+
+create table if not exists public.wine_events (
+  id uuid primary key default gen_random_uuid(),
+  wine_id text not null references public.wines(id) on delete cascade,
+  event_type text not null, -- sale | restock | adjust
+  delta integer not null,
+  old_quantity integer not null,
+  new_quantity integer not null,
+  source text, -- откуда изменение: modal / inline / etc
+  actor text, -- кто менял (email из Auth)
+  created_at timestamptz not null default now()
+);
+
+alter table public.wine_events enable row level security;
+
+drop policy if exists "wine_events_read_authenticated" on public.wine_events;
+create policy "wine_events_read_authenticated"
+on public.wine_events
+for select
+to authenticated
+using (true);
+
+drop policy if exists "wine_events_insert_authenticated" on public.wine_events;
+create policy "wine_events_insert_authenticated"
+on public.wine_events
+for insert
+to authenticated
+with check (true);
+
 -- Публичный режим без пароля (НЕ рекомендуется для реальных данных).
 -- Если когда-нибудь захотите “без логина”, раскомментируйте блок ниже.
 --
