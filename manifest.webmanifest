@@ -1,0 +1,25 @@
+{
+  "name": "Wine liquidation",
+  "short_name": "Wine",
+  "description": "Учет остатков винных позиций",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8f6",
+  "theme_color": "#54cf17",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
+
