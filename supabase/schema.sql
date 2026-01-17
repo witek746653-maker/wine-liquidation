@@ -49,22 +49,21 @@ to authenticated
 using (true)
 with check (true);
 
--- Если вы ОЧЕНЬ хотите режим без логина (НЕ рекомендуется для публичного сайта),
--- можно добавить анонимные политики ниже (снимите комментарии).
--- Это позволит любому посетителю читать/менять данные.
+-- ПУБЛИЧНЫЙ режим без логина (вы выбрали именно его).
+-- ВАЖНО: это значит, что ЛЮБОЙ посетитель может читать/менять данные.
 --
--- drop policy if exists "wines_read_anon" on public.wines;
--- create policy "wines_read_anon"
--- on public.wines
--- for select
--- to anon
--- using (true);
---
--- drop policy if exists "wines_write_anon" on public.wines;
--- create policy "wines_write_anon"
--- on public.wines
--- for all
--- to anon
--- using (true)
--- with check (true);
+drop policy if exists "wines_read_anon" on public.wines;
+create policy "wines_read_anon"
+on public.wines
+for select
+to anon
+using (true);
+
+drop policy if exists "wines_write_anon" on public.wines;
+create policy "wines_write_anon"
+on public.wines
+for all
+to anon
+using (true)
+with check (true);
 
