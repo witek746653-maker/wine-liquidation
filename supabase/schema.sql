@@ -84,13 +84,17 @@ to authenticated
 with check (true);
 
 -- Быстрый “итог” для UI (чипы в списке Истории)
--- Считает суммарное изменение количества (delta_sum) и количество событий (events_count) по каждой позиции.
+-- Считает:
+-- - sold_bottles: сколько ВСЕГО продано (сумма всех отрицательных delta по модулю)
+-- - added_bottles: сколько ВСЕГО добавлено (сумма всех положительных delta)
+-- - events_count: сколько событий всего
 drop view if exists public.wine_event_summary;
 create view public.wine_event_summary as
 select
   wine_id,
   count(*)::int as events_count,
-  coalesce(sum(delta), 0)::int as delta_sum,
+  coalesce(sum(case when delta < 0 then -delta else 0 end), 0)::int as sold_bottles,
+  coalesce(sum(case when delta > 0 then delta else 0 end), 0)::int as added_bottles,
   max(created_at) as last_event_at
 from public.wine_events
 group by wine_id;

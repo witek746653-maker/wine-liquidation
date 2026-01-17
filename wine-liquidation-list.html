@@ -571,26 +571,43 @@
             );
           }
 
-          const delta = Number(s.delta_sum || 0);
-          if (delta < 0) {
+          const sold = Number(s.sold_bottles || 0);
+          const added = Number(s.added_bottles || 0);
+
+          // Если были события, но по факту ничего не менялось (редко) — покажем 0
+          if (!sold && !added) {
             return (
-              <div className="px-2 py-1 rounded-full border border-red-200 bg-red-50 text-[10px] font-black text-red-700 tabular-nums">
-                {delta}
-              </div>
-            );
-          }
-          if (delta > 0) {
-            return (
-              <div className="px-2 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 tabular-nums">
-                +{delta}
+              <div className="px-2 py-1 rounded-full border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-black/20 text-[10px] font-bold text-gray-600 tabular-nums">
+                0
               </div>
             );
           }
 
-          // События были, но суммарно 0
+          // Если есть и продажи и поступления — покажем оба чипа рядом
+          if (sold && added) {
+            return (
+              <div className="flex items-center gap-1">
+                <div className="px-2 py-1 rounded-full border border-red-200 bg-red-50 text-[10px] font-black text-red-700 tabular-nums">
+                  -{sold}
+                </div>
+                <div className="px-2 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 tabular-nums">
+                  +{added}
+                </div>
+              </div>
+            );
+          }
+
+          if (sold) {
+            return (
+              <div className="px-2 py-1 rounded-full border border-red-200 bg-red-50 text-[10px] font-black text-red-700 tabular-nums">
+                -{sold}
+              </div>
+            );
+          }
+
           return (
-            <div className="px-2 py-1 rounded-full border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-black/20 text-[10px] font-bold text-gray-600 tabular-nums">
-              0
+            <div className="px-2 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 tabular-nums">
+              +{added}
             </div>
           );
         }
@@ -775,7 +792,7 @@
         const [historyOpenWineId, setHistoryOpenWineId] = useState(null);
         const [historyLoadingWineId, setHistoryLoadingWineId] = useState(null);
         const [historyEventsByWineId, setHistoryEventsByWineId] = useState({}); // { [wineId]: events[] }
-        const [historySummaryByWineId, setHistorySummaryByWineId] = useState({}); // { [wineId]: { events_count, delta_sum } }
+        const [historySummaryByWineId, setHistorySummaryByWineId] = useState({}); // { [wineId]: { events_count, sold_bottles, added_bottles } }
         const [historySummaryLoading, setHistorySummaryLoading] = useState(false);
 
         function formatDateTime(value) {
@@ -850,13 +867,14 @@
           if (SUPABASE_REQUIRE_AUTH && !authUser) return;
           setHistorySummaryLoading(true);
           try {
-            const { data, error } = await supa.from("wine_event_summary").select("wine_id, events_count, delta_sum");
+            const { data, error } = await supa.from("wine_event_summary").select("wine_id, events_count, sold_bottles, added_bottles");
             if (error) throw error;
             const map = {};
             (data || []).forEach((row) => {
               map[row.wine_id] = {
                 events_count: Number(row.events_count || 0),
-                delta_sum: Number(row.delta_sum || 0),
+                sold_bottles: Number(row.sold_bottles || 0),
+                added_bottles: Number(row.added_bottles || 0),
               };
             });
             setHistorySummaryByWineId(map);
