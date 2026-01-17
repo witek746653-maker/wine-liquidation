@@ -1,0 +1,18 @@
+# Secrets
+.env
+.env.*
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+
+# Node (на будущее)
+node_modules/
+dist/
+
