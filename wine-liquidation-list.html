@@ -145,6 +145,11 @@
       const SUPABASE_URL = ""; // например: https://xxxx.supabase.co
       const SUPABASE_ANON_KEY = ""; // длинная строка "anon public"
 
+      // Общий пароль для всех посетителей:
+      // 1) Создайте в Supabase одного пользователя с этим email (любым вашим) и ОДНИМ паролем
+      // 2) В приложении люди будут вводить только пароль
+      const SHARED_AUTH_EMAIL = "witek746653@gmail.com";
+
       // **Auth**: вход по email/паролю (как “замок на дверь”).
       // Если true — приложение потребует логин, и только залогиненный пользователь сможет читать/писать в Supabase (через RLS).
       const SUPABASE_REQUIRE_AUTH = true;
@@ -517,7 +522,8 @@
         const saveTimerRef = useRef(null);
         const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured() ? "Supabase: готов" : "Supabase: выключен");
         const [authUser, setAuthUser] = useState(null);
-        const [authUserEmail, setAuthUserEmail] = useState("");
+        // Email прячем (общий аккаунт), чтобы людям нужен был только пароль
+        const [authUserEmail, setAuthUserEmail] = useState(SHARED_AUTH_EMAIL);
         const [authPassword, setAuthPassword] = useState("");
         const [authError, setAuthError] = useState("");
 
@@ -600,7 +606,8 @@
           try {
             setSyncStatus("Supabase: логин...");
             const { data, error } = await supa.auth.signInWithPassword({
-              email: String(authUserEmail || "").trim(),
+              // Берём общий email, чтобы пользователю был нужен только пароль
+              email: String(SHARED_AUTH_EMAIL || authUserEmail || "").trim(),
               password: String(authPassword || ""),
             });
             if (error) throw error;
@@ -1145,12 +1152,9 @@
                           </div>
                         ) : (
                           <div className="flex flex-col gap-2">
-                            <input
-                              className="edit-input text-xs"
-                              placeholder="Email"
-                              value={authUserEmail}
-                              onChange={(e) => setAuthUserEmail(e.target.value)}
-                            />
+                            <div className="text-[10px] text-gray-500">
+                              Введите общий пароль (email скрыт).
+                            </div>
                             <input
                               className="edit-input text-xs"
                               placeholder="Пароль"
