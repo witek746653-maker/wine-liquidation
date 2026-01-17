@@ -145,10 +145,9 @@
       const SUPABASE_URL = ""; // например: https://xxxx.supabase.co
       const SUPABASE_ANON_KEY = ""; // длинная строка "anon public"
 
-      // Безопасный режим по умолчанию: читать/писать можно только после логина
-      // Публичное приложение без пароля:
-      // **ВНИМАНИЕ**: если false, любой посетитель сайта сможет менять данные в Supabase
-      const SUPABASE_REQUIRE_AUTH = false;
+      // **Auth**: вход по email/паролю (как “замок на дверь”).
+      // Если true — приложение потребует логин, и только залогиненный пользователь сможет читать/писать в Supabase (через RLS).
+      const SUPABASE_REQUIRE_AUTH = true;
 
       function isSupabaseConfigured() {
         return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && String(SUPABASE_URL).startsWith("http"));

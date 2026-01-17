@@ -49,21 +49,21 @@ to authenticated
 using (true)
 with check (true);
 
--- ПУБЛИЧНЫЙ режим без логина (вы выбрали именно его).
--- ВАЖНО: это значит, что ЛЮБОЙ посетитель может читать/менять данные.
+-- Публичный режим без пароля (НЕ рекомендуется для реальных данных).
+-- Если когда-нибудь захотите “без логина”, раскомментируйте блок ниже.
 --
-drop policy if exists "wines_read_anon" on public.wines;
-create policy "wines_read_anon"
-on public.wines
-for select
-to anon
-using (true);
-
-drop policy if exists "wines_write_anon" on public.wines;
-create policy "wines_write_anon"
-on public.wines
-for all
-to anon
-using (true)
-with check (true);
+-- drop policy if exists "wines_read_anon" on public.wines;
+-- create policy "wines_read_anon"
+-- on public.wines
+-- for select
+-- to anon
+-- using (true);
+--
+-- drop policy if exists "wines_write_anon" on public.wines;
+-- create policy "wines_write_anon"
+-- on public.wines
+-- for all
+-- to anon
+-- using (true)
+-- with check (true);
 
