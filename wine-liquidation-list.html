@@ -345,26 +345,40 @@
           if (!h) return;
 
           // Название
-          if (map.name === null && (h.includes("наимен") || h.includes("назван"))) map.name = idx;
+          if (map.name === null && (h.includes("наимен") || h.includes("назван") || h.includes("товар") || h.includes("wine"))) {
+             map.name = idx;
+          }
 
-          // Регион/страна (если вдруг есть)
+          // === ОБНОВЛЕННЫЙ ПОИСК РЕГИОНА ===
           if (
             map.region === null &&
-            (h.includes("регион") || h.includes("страна") || h.startsWith("рег") || h.includes("апеллась") || h.includes("область"))
+            (
+              h.includes("регион") || 
+              h.includes("страна") ||        // Часто используется "Страна"
+              h.includes("происхождение") || // Или "Страна происхождения"
+              h.startsWith("рег") || 
+              h.includes("апеллась") || 
+              h.includes("область") ||
+              h.includes("место") ||
+              h.includes("производ")         // На случай, если вы хотите видеть Производителя
+            )
           ) {
             map.region = idx;
           }
+          // =================================
 
-          // Количество / остаток / единицы
+          // Количество
           if (
             map.quantity === null &&
-            (h.includes("остат") || h.includes("колич") || h.includes("кол-во") || h === "ед." || h.startsWith("ед"))
+            (h.includes("остат") || h.includes("колич") || h.includes("кол-во") || h === "ед." || h.startsWith("ед") || h.includes("шт"))
           ) {
             map.quantity = idx;
           }
 
-          // Категория/тип
-          if (map.category === null && (h.includes("катег") || h.includes("тип"))) map.category = idx;
+          // Категория
+          if (map.category === null && (h.includes("катег") || h.includes("тип") || h.includes("вид") || h.includes("групп"))) {
+             map.category = idx;
+          }
 
           // Цена
           if (map.price === null && h.includes("цена") && !h.includes("скид") && !h.includes("%") && !h.includes("-25")) {
@@ -373,16 +387,13 @@
           // Цена со скидкой
           if (
             map.discountPrice === null &&
-            (h.includes("скид") || h.includes("%") || h.includes("-25") || h.includes("со скид"))
+            (h.includes("скид") || h.includes("%") || h.includes("-25") || h.includes("со скид") || h.includes("акция"))
           ) {
             map.discountPrice = idx;
           }
         });
 
-        // В вашем файле часто бывает нумерация в колонке A без заголовка.
-        // Если не нашли явный id — считаем, что это первый столбец.
         if (map.id === null) map.id = 0;
-
         return map;
       }
 
@@ -1025,28 +1036,17 @@
         }
 
         async function loadLocalOrExcel() {
+          // 1. Проверяем, есть ли данные в браузере (если вы уже работали)
           const stored = loadFromStorage();
           if (stored && stored.length) {
             const initial = stored.map(normalizeWine);
             initial.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
             return initial;
           }
-
-          // Если localStorage пустой — пробуем авто-загрузку локального Excel файла
-          const defaultXlsxUrl = encodeURI("./Допродаем вина(нормальные названия).xlsx");
-          try {
-            const res = await fetch(defaultXlsxUrl, { cache: "no-store" });
-            if (!res.ok) throw new Error(`Не удалось скачать Excel (HTTP ${res.status})`);
-            const buf = await res.arrayBuffer();
-            const imported = parseExcelToWines(buf);
-            if (imported.length) return imported;
-          } catch (e) {
-            console.warn("Авто-загрузка Excel не сработала:", e);
-          }
-
-          const fallback = INITIAL_WINES.slice().map(normalizeWine);
-          fallback.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-          return fallback;
+          // 2. АВТО-ЗАГРУЗКА ОТКЛЮЧЕНА.
+          // Возвращаем пустой список. Пользователь должен нажать
+          // "Меню" -> "Загрузить Excel", чтобы данные появились.
+          return [];
         }
 
         // Загружаем данные один раз при старте
