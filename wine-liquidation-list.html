@@ -231,7 +231,7 @@
           if (!raw) return null;
           const parsed = JSON.parse(raw);
           if (!Array.isArray(parsed)) return null;
-          const normalized = parsed.map(normalizeWine).filter((w) => w.id);
+          const normalized = parsed.map(normalizeWine).filter((w) => w.id && isDisplayableWine(w));
           return normalized.length ? normalized : null;
         } catch (e) {
           console.warn("Не смог прочитать localStorage:", e);
@@ -273,10 +273,41 @@
         return !Array.isArray(row) || row.every((c) => !normalizeText(c));
       }
 
+      function isServiceTitleName(value) {
+        // “Служебные” строки, которые НЕ должны попадать в список товаров
+        // (например: "ДОПРОДАЕМ ВИНА", "ИТОГО", "СУММА" и т.п.)
+        const s = normalizeText(value).toLowerCase();
+        if (!s) return true;
+
+        // Заголовок файла / разделители
+        if (s.includes("допродаем") && s.includes("вина")) return true;
+
+        // Итоги/суммы
+        const badStarts = ["итого", "итог", "всего", "сумма", "subtotal", "total"];
+        if (badStarts.some((w) => s === w || s.startsWith(`${w} `) || s.startsWith(`${w}:`))) return true;
+
+        return false;
+      }
+
+      function hasMeaningfulNumbers({ price, discountPrice, quantity }) {
+        // Если нет ни цены, ни скидочной цены, ни остатка — это почти всегда “служебная” строка.
+        const p = safeNumber(price, 0);
+        const d = safeNumber(discountPrice, 0);
+        const q = safeNumber(quantity, 0);
+        return p > 0 || d > 0 || q > 0;
+      }
+
+      function isDisplayableWine(w) {
+        const name = normalizeText(w?.name);
+        if (!name) return false;
+        if (isServiceTitleName(name)) return false;
+        return hasMeaningfulNumbers({ price: w?.price, discountPrice: w?.discountPrice, quantity: w?.quantity });
+      }
+
       function detectHeaderRowIndex(rows) {
         // В файлах Excel иногда есть 1-2 пустые/служебные строки сверху.
         // Найдем строку, где есть "наимен/назван" + "цена" и т.п.
-        const maxScan = Math.min(rows.length, 15);
+        const maxScan = Math.min(rows.length, 50);
         for (let i = 0; i < maxScan; i++) {
           const row = rows[i] || [];
           const cells = row.map(normalizeHeader).filter(Boolean);
@@ -284,9 +315,16 @@
 
           const hasName = cells.some((c) => c.includes("наимен") || c.includes("назван"));
           const hasPrice = cells.some((c) => c.includes("цена"));
+          const hasDiscount = cells.some((c) => c.includes("скид") || c.includes("%") || c.includes("-25") || c.includes("со скид"));
           const hasQty = cells.some((c) => c.includes("кол") || c.includes("остат") || c === "ед." || c.includes("ед"));
-          const score = (hasName ? 1 : 0) + (hasPrice ? 1 : 0) + (hasQty ? 1 : 0);
-          if (score >= 2) return i;
+          const hasRegion = cells.some((c) => c.includes("регион") || c.includes("страна") || c.startsWith("рег"));
+
+          // Считаем, что заголовок — это строка, где точно есть "наименование"
+          // и присутствует хотя бы один “числовой” столбец (цена/скидка/остаток)
+          // + по возможности регион.
+          const score =
+            (hasName ? 2 : 0) + (hasPrice ? 1 : 0) + (hasDiscount ? 1 : 0) + (hasQty ? 1 : 0) + (hasRegion ? 1 : 0);
+          if (hasName && (hasPrice || hasDiscount || hasQty) && score >= 3) return i;
         }
         return 0;
       }
@@ -310,7 +348,12 @@
           if (map.name === null && (h.includes("наимен") || h.includes("назван"))) map.name = idx;
 
           // Регион/страна (если вдруг есть)
-          if (map.region === null && (h.includes("регион") || h.includes("страна"))) map.region = idx;
+          if (
+            map.region === null &&
+            (h.includes("регион") || h.includes("страна") || h.startsWith("рег") || h.includes("апеллась") || h.includes("область"))
+          ) {
+            map.region = idx;
+          }
 
           // Количество / остаток / единицы
           if (
@@ -400,6 +443,9 @@
           const rawId = normalizeText(row[col.id]);
           const rawName = normalizeText(row[col.name ?? 1]);
 
+          // Пропускаем “служебные” строки (заголовки/итоги), чтобы они не попадали в список
+          if (isServiceTitleName(rawName)) continue;
+
           // В файле могут быть "строки-разделители" категорий (например: "Игристое")
           const maybeCat = normalizeCategory(rawName);
           const isCategoryRow = !rawId && maybeCat && safeNumber(row[col.price ?? -1], 0) === 0 && safeNumber(row[col.quantity ?? -1], 0) === 0;
@@ -411,10 +457,13 @@
           const categoryFromCol = col.category !== null ? normalizeCategory(row[col.category]) : "";
           const category = categoryFromCol || currentCategory || "";
 
-          const price = col.price !== null ? row[col.price] : 0;
-          const discountPrice = col.discountPrice !== null ? row[col.discountPrice] : 0;
-          const quantity = col.quantity !== null ? row[col.quantity] : 0;
-          const region = col.region !== null ? row[col.region] : "";
+          const priceRaw = col.price !== null ? row[col.price] : 0;
+          const discountRaw = col.discountPrice !== null ? row[col.discountPrice] : 0;
+          const quantityRaw = col.quantity !== null ? row[col.quantity] : 0;
+          const regionRaw = col.region !== null ? row[col.region] : "";
+
+          // Если в строке нет ни цены, ни скидки, ни остатка — это почти всегда “служебная” строка (не товар)
+          if (!hasMeaningfulNumbers({ price: priceRaw, discountPrice: discountRaw, quantity: quantityRaw })) continue;
 
           const id = rawId ? `wine_${rawId}` : makeId();
 
@@ -422,10 +471,10 @@
             id,
             category,
             name: rawName || "Без названия",
-            region: normalizeText(region),
-            price,
-            discountPrice,
-            quantity,
+            region: normalizeText(regionRaw),
+            price: safeNumber(priceRaw, 0),
+            discountPrice: safeNumber(discountRaw, 0),
+            quantity: Math.max(0, Math.floor(safeNumber(quantityRaw, 0))),
           });
 
           if (!wine.id) continue;
@@ -906,7 +955,7 @@
                 discountPrice: row.discount_price,
                 quantity: row.quantity,
               })
-            );
+            ).filter(isDisplayableWine);
             setSyncStatus(`Supabase: загружено ${normalized.length}`);
             return normalized;
           } catch (e) {
@@ -984,7 +1033,7 @@
           }
 
           // Если localStorage пустой — пробуем авто-загрузку локального Excel файла
-          const defaultXlsxUrl = encodeURI("./Допродаем вина (1).xlsx");
+          const defaultXlsxUrl = encodeURI("./Допродаем вина(нормальные названия).xlsx");
           try {
             const res = await fetch(defaultXlsxUrl, { cache: "no-store" });
             if (!res.ok) throw new Error(`Не удалось скачать Excel (HTTP ${res.status})`);
