@@ -1,7 +1,7 @@
 // Service Worker для PWA (кеш “обложки” приложения)
 // **Service worker**: скрипт, который может хранить файлы оффлайн и ускорять загрузку.
 
-const CACHE_NAME = "wine-liquidation-v1";
+const CACHE_NAME = "wine-liquidation-v2";
 const ASSETS = [
   "./",
   "./index.html",
